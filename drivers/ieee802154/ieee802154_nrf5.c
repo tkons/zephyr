@@ -256,6 +256,15 @@ static int nrf5_set_txpower(struct device *dev, s16_t dbm)
 	return 0;
 }
 
+static int nrf5_get_rssi(struct device *dev, s8_t *rssi)
+{
+	ARG_UNUSED(dev);
+
+	*rssi = nrf_802154_rssi_last_get();
+
+	return 0;
+}
+
 static int handle_ack(struct nrf5_802154_data *nrf5_radio)
 {
 	u8_t ack_len = nrf5_radio->ack_frame.psdu[0] - NRF5_FCS_LENGTH;
@@ -557,6 +566,7 @@ static struct ieee802154_radio_api nrf5_radio_api = {
 	.stop = nrf5_stop,
 	.tx = nrf5_tx,
 	.configure = nrf5_configure,
+	.get_rssi = nrf5_get_rssi,
 };
 
 #if defined(CONFIG_NET_L2_IEEE802154)

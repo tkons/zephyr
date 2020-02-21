@@ -303,8 +303,12 @@ int8_t otPlatRadioGetRssi(otInstance *aInstance)
 {
 	ARG_UNUSED(aInstance);
 
-	/* TODO: No API in Zephyr to get the RSSI. */
-	return 0;
+	int8_t retRssi;
+	if (radio_api->get_rssi) {
+		radio_api->get_rssi(radio_dev, &retRssi);
+	}
+
+	return retRssi;
 }
 
 otRadioCaps otPlatRadioGetCaps(otInstance *aInstance)

@@ -152,6 +152,9 @@ struct ieee802154_radio_api {
 		       void (*done_cb)(struct device *dev,
 				       s16_t max_ed));
 #endif /* CONFIG_NET_L2_OPENTHREAD */
+
+	/** Get RSSI level in dbm */
+	int (*get_rssi)(struct device *dev, s8_t *rssi);
 };
 
 /* Make sure that the network interface API is properly setup inside
