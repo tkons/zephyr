@@ -335,7 +335,7 @@ void log_printk(const char *fmt, va_list ap)
 
 			z_log_string_from_user(src_level_union.value, str);
 		} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE)) {
-			log_generic(src_level_union.structure, fmt, ap);
+			log_generic(src_level_union.structure, fmt, ap, false);
 		} else {
 			u8_t str[CONFIG_LOG_PRINTK_MAX_STRING_LENGTH + 1];
 			struct log_msg *msg;
@@ -376,7 +376,7 @@ static u32_t count_args(const char *fmt)
 	return args;
 }
 
-void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap)
+void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap, bool enable_strdup)
 {
 	if (_is_user_context()) {
 		log_generic_from_user(src_level, fmt, ap);
@@ -396,12 +396,24 @@ void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap)
 	} else {
 		log_arg_t args[LOG_MAX_NARGS];
 		u32_t nargs = count_args(fmt);
+		u32_t mask;
 
 		__ASSERT_NO_MSG(nargs < LOG_MAX_NARGS);
 		for (int i = 0; i < nargs; i++) {
 			args[i] = va_arg(ap, log_arg_t);
 		}
 
+		if (enable_strdup && ( mask = z_log_get_s_mask(fmt, nargs ))) {
+			while (mask) {
+				u32_t idx =31 - __builtin_clz(mask);
+				const char *str = (const char *)args[idx];
+				if (!log_is_strdup(str) &&
+					(str != log_strdup_fail_msg)) {
+					args[idx] = (log_arg_t)log_strdup(str);
+				}
+				mask &= ~BIT(idx);
+			}
+		}
 		log_n(fmt, args, nargs, src_level);
 	}
 }
@@ -412,7 +424,7 @@ void log_string_sync(struct log_msg_ids src_level, const char *fmt, ...)
 
 	va_start(ap, fmt);
 
-	log_generic(src_level, fmt, ap);
+	log_generic(src_level, fmt, ap, false);
 
 	va_end(ap);
 }
