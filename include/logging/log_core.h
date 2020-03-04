@@ -185,42 +185,48 @@ extern "C" {
 		}							 \
 	} while (false)
 
-
-static inline log_arg_t __do_strdup(u32_t msk, u32_t idx , log_arg_t param) {
-	if (msk & (1<<idx )) {
-		const char * str = (const char * )param;
+static inline log_arg_t __do_strdup(u32_t msk, u32_t idx, log_arg_t param)
+{
+	if (msk & (1<<idx)) {
+		const char *str = (const char *)param;
 		char *log_strdup(const char *str);
-		param = (log_arg_t )log_strdup(str);
+
+		param = (log_arg_t)log_strdup(str);
 	}
 	return param;
 }
 
-
-
-#define __LOG_INTERNAL_VA(is_user_context, _src_level, _format, _valist, _argnum, _strdup)	 \
-			do {								 \
-				if (is_user_context) {					 \
-					log_generic_from_user(_src_level, _format, _valist); \
-				} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE)) {		 \
-					log_generic(_src_level, _format, _valist,_strdup); \
-				} else {						 \
-					if (0==_argnum) _LOG_INTERNAL_0(_src_level, _format); else { \
-					u32_t mask = _strdup?z_log_get_s_mask(_format, _argnum):0; \
-					if (1==_argnum) _LOG_INTERNAL_1(_src_level, _format, \
-							__do_strdup(mask, 0, va_arg(_valist,log_arg_t))); else \
-					if (2==_argnum) _LOG_INTERNAL_2(_src_level, _format, \
-							__do_strdup(mask, 0, va_arg(_valist,log_arg_t)), \
-							__do_strdup(mask, 1, va_arg(_valist,log_arg_t))); else \
-					if (3==_argnum) _LOG_INTERNAL_3(_src_level, _format,\
-							__do_strdup(mask, 0, va_arg(_valist,log_arg_t)), \
-							__do_strdup(mask, 1, va_arg(_valist,log_arg_t)), \
-							__do_strdup(mask, 2, va_arg(_valist,log_arg_t))); else\
-					log_generic(_src_level,_format, _valist,_strdup);\
-					}	\
-				}	\
-			} while (false)
-
-
+#define __LOG_INTERNAL_VA(is_user_context, _src_level, _format, _valist, _argnum, _strdup) \
+	do {								 \
+		if (is_user_context) {					 \
+			log_generic_from_user(_src_level, _format, _valist);\
+		} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE)) {		 \
+			log_generic(_src_level, _format, _valist, _strdup);\
+		} else {						 \
+			if (_argnum == 0)				\
+				_LOG_INTERNAL_0(_src_level, _format); \
+			else {						\
+			u32_t mask = _strdup?z_log_get_s_mask(_format, _argnum):0;\
+										\
+			if (_argnum == 1)				\
+				_LOG_INTERNAL_1(_src_level, _format, \
+				__do_strdup(mask, 0, va_arg(_valist, log_arg_t)));\
+			else						\
+			if (_argnum == 2)\
+				_LOG_INTERNAL_2(_src_level, _format, \
+				__do_strdup(mask, 0, va_arg(_valist, log_arg_t)),\
+				__do_strdup(mask, 1, va_arg(_valist, log_arg_t)));\
+			else						\
+			if (_argnum == 3)\
+				_LOG_INTERNAL_3(_src_level, _format,\
+				__do_strdup(mask, 0, va_arg(_valist, log_arg_t)),\
+				__do_strdup(mask, 1, va_arg(_valist, log_arg_t)),\
+				__do_strdup(mask, 2, va_arg(_valist, log_arg_t)));\
+			else						\
+			log_generic(_src_level, _format, _valist, _strdup);\
+			}\
+		}	\
+	} while (false)
 
 #define _LOG_INTERNAL_0(_src_level, _str) \
 	log_0(_str, _src_level)
@@ -657,13 +663,20 @@ void log_hexdump_sync(struct log_msg_ids src_level, const char *metadata,
 void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap, bool enable_strdup);
 
 /**
+ * @brief Returns number of arguments visible from format string
+ *
+ * @note This function is intended to be used when porting other log systems.
+ */
+u32_t log_count_args(const char *fmt);
+
+/**
  * @brief Writes a generic log message to the log from user mode.
  *
  * @note This function is intended to be used internally
  *	 by the logging subsystem.
  */
 void log_generic_from_user(struct log_msg_ids src_level,
-			   const char *fmt, va_list ap);
+	const char *fmt, va_list ap);
 
 /** @brief Check if address belongs to the memory pool used for transient.
  *

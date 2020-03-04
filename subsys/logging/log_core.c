@@ -358,7 +358,7 @@ void log_printk(const char *fmt, va_list ap)
  *
  * Function counts number of '%' not followed by '%'.
  */
-static u32_t count_args(const char *fmt)
+u32_t log_count_args(const char *fmt)
 {
 	u32_t args = 0U;
 	bool prev = false; /* if previous char was a modificator. */
@@ -395,18 +395,20 @@ void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap, bool
 		}
 	} else {
 		log_arg_t args[LOG_MAX_NARGS];
-		u32_t nargs = count_args(fmt);
-		u32_t mask;
+		u32_t nargs = log_count_args(fmt);
 
 		__ASSERT_NO_MSG(nargs < LOG_MAX_NARGS);
 		for (int i = 0; i < nargs; i++) {
 			args[i] = va_arg(ap, log_arg_t);
 		}
 
-		if (enable_strdup && ( mask = z_log_get_s_mask(fmt, nargs ))) {
+		if (enable_strdup) {
+			u32_t mask = z_log_get_s_mask(fmt, nargs);
+
 			while (mask) {
-				u32_t idx =31 - __builtin_clz(mask);
+				u32_t idx = 31 - __builtin_clz(mask);
 				const char *str = (const char *)args[idx];
+
 				if (!log_is_strdup(str) &&
 					(str != log_strdup_fail_msg)) {
 					args[idx] = (log_arg_t)log_strdup(str);
