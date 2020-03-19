@@ -25,7 +25,7 @@ void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion,
 	const bool do_strdup = true;
 
 #ifdef OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION__COUNT_ARGS
-	u32_t argsNum = (int) aLogRegion;
+	u32_t argsNum = (u32_t) aLogRegion;
 #else
 	u32_t argsNum = log_count_args(aFormat);
 #endif

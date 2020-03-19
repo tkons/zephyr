@@ -145,7 +145,7 @@
 /**
  * @def OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION
  *
- * The platform logging fimction for openthread.
+ * The platform logging function for openthread.
  *
  */
 
@@ -162,8 +162,5 @@
 	"OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION musnt be defined before"
 #endif
 #define OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION__COUNT_ARGS
-
-
-
 
 #endif  /* OPENTHREAD_CORE_NRF52840_CONFIG_H_ */

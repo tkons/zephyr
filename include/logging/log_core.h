@@ -327,36 +327,31 @@ static inline char z_log_minimal_level_to_char(int level)
 	} while (false)
 
 
-#define __LOG_VA(_level, _id, _filter, _format, _valist, _argnum, _strdup) \
-		do {									   \
-			bool is_user_context = _is_user_context();			   \
-											   \
-			if (Z_LOG_CONST_LEVEL_CHECK(_level)) {				   \
-				if (IS_ENABLED(CONFIG_LOG_MINIMAL)) {			   \
-					if (IS_ENABLED(CONFIG_LOG_PRINTK)) { \
-						log_printk(_format, _valist); \
-					} else { \
-						vprintk(_format, _valist); \
-					} \
-				} else if (is_user_context ||				   \
-					   (_level <= LOG_RUNTIME_FILTER(_filter))) {  \
-					struct log_msg_ids src_level = {		   \
-						.level = _level,			   \
-						.domain_id = CONFIG_LOG_DOMAIN_ID,	   \
-						.source_id = _id			   \
-					};						   \
-						__LOG_INTERNAL_VA(is_user_context, 	   \
-								   src_level,		   \
-								   _format, _valist, _argnum, _strdup); \
-				}							   \
-			}								   \
-			if (false) {							   \
-				/* Arguments checker present but never evaluated.*/    \
-				/* Placed here to ensure that __VA_ARGS__ are*/ 	   \
-				/* evaluated once when log is enabled.*/		   \
-				/*log_printf_arg_checker(__VA_ARGS__);*/			   \
-			}								   \
-		} while (false)
+#define __LOG_VA(_level, _id, _filter, _format, _valist, _argnum, _strdup)     \
+	do {								       \
+		bool is_user_context = _is_user_context();		       \
+									       \
+		if (Z_LOG_CONST_LEVEL_CHECK(_level)) {			       \
+			if (IS_ENABLED(CONFIG_LOG_MINIMAL)) {		       \
+				if (IS_ENABLED(CONFIG_LOG_PRINTK)) { 	       \
+					log_printk(_format, _valist); 	       \
+				} else { 				       \
+					vprintk(_format, _valist); 	       \
+				} 					       \
+			} else if (is_user_context ||			       \
+				   (_level <= LOG_RUNTIME_FILTER(_filter))) {  \
+				struct log_msg_ids src_level = {	       \
+					.level = _level,		       \
+					.domain_id = CONFIG_LOG_DOMAIN_ID,     \
+					.source_id = _id		       \
+				};					       \
+				__LOG_INTERNAL_VA(is_user_context, 	       \
+						src_level,		       \
+						_format, _valist, _argnum,     \
+						_strdup); 		       \
+			}						       \
+		}							       \
+	} while (false)
 
 
 #define Z_LOG(_level, ...)			       \
@@ -365,10 +360,10 @@ static inline char z_log_minimal_level_to_char(int level)
 	      LOG_CURRENT_DYNAMIC_DATA_ADDR(),	       \
 	      __VA_ARGS__)
 
-#define Z_LOG_VA(_level, _format, _valist, _argnum, _strdup)			       \
-		__LOG_VA(_level,					   \
-			  (u16_t)LOG_CURRENT_MODULE_ID(),		   \
-			  LOG_CURRENT_DYNAMIC_DATA_ADDR(),		   \
+#define Z_LOG_VA(_level, _format, _valist, _argnum, _strdup) \
+		__LOG_VA(_level,							\
+			  (u16_t)LOG_CURRENT_MODULE_ID(),		\
+			  LOG_CURRENT_DYNAMIC_DATA_ADDR(),		\
 			  _format, _valist, _argnum, _strdup)
 
 #define Z_LOG_INSTANCE(_level, _inst, ...)		 \
