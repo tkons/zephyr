@@ -409,10 +409,10 @@ extern struct log_source_const_data __log_const_end[0];
 
 /**@brief Enum with possible actions for strdup operation.
  */
-enum _strdup_action {
-	_strdup_skip,
-	_strdup_execute,
-	_strdup_check_if_not_already_duplicated_then_execute
+enum log_strdup_action {
+	LOG_STRDUP_SKIP,     /**< None string duplication. */
+	LOG_STRDUP_EXEC,     /**< RAM strings duplicated. */
+	LOG_STRDUP_CHECK_EXEC/**< RAM strings duplicated, if not dupl. before.*/
 };
 
 /** @brief Get name of the log source.
@@ -586,12 +586,13 @@ void log_hexdump_sync(struct log_msg_ids src_level, const char *metadata,
  *
  * @note This function is intended to be used when porting other log systems.
  *
- * @param src_level    Log identification.
- * @param fmt          String to format.
- * @param ap           Poiner to arguments list
- * @param action       Manages strdup activity
+ * @param src_level      Log identification.
+ * @param fmt            String to format.
+ * @param ap             Poiner to arguments list.
+ * @param strdup_action  Manages strdup activity.
  */
-void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap, enum _strdup_action action);
+void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap,
+					enum log_strdup_action strdup_action);
 
 /**
  * @brief Returns number of arguments visible from format string
@@ -698,13 +699,13 @@ __syscall void z_log_hexdump_from_user(u32_t src_level_val,
 /*********  Shall be used in the log entry interface function.  ***************/
 /*********  Speed optimized for up to three arguments number.   ***************/
 /******************************************************************************/
-#define Z_LOG_VA(_level, _str, _valist, _argnum, _strdup)	\
+#define Z_LOG_VA(_level, _str, _valist, _argnum, _strdup_action)\
 	__LOG_VA(_level,					\
 		  (u16_t)LOG_CURRENT_MODULE_ID(),		\
 		  LOG_CURRENT_DYNAMIC_DATA_ADDR(),		\
-		  _str, _valist, _argnum, _strdup)
+		  _str, _valist, _argnum, _strdup_action)
 
-#define __LOG_VA(_level, _id, _filter, _str, _valist, _argnum, _strdup)        \
+#define __LOG_VA(_level, _id, _filter, _str, _valist, _argnum, _strdup_action) \
 	do {								       \
 		bool is_user_context = _is_user_context();		       \
 									       \
@@ -725,7 +726,7 @@ __syscall void z_log_hexdump_from_user(u32_t src_level_val,
 				__LOG_INTERNAL_VA(is_user_context,	       \
 						src_level,		       \
 						_str, _valist, _argnum,        \
-						_strdup);		       \
+						_strdup_action);	       \
 			}						       \
 		}							       \
 	} while (false)
@@ -742,8 +743,8 @@ __syscall void z_log_hexdump_from_user(u32_t src_level_val,
  *
  * @return	  Duplicated string or not changed param
  */
-static inline log_arg_t __do_strdup(u32_t msk, u32_t idx, log_arg_t param,
-					enum _strdup_action action)
+static inline log_arg_t z_log_do_strdup(u32_t msk, u32_t idx, log_arg_t param,
+					enum log_strdup_action action)
 {
 #ifndef CONFIG_LOG_MINIMAL
 	char *log_strdup(const char *str);
@@ -755,7 +756,7 @@ static inline log_arg_t __do_strdup(u32_t msk, u32_t idx, log_arg_t param,
 		 * Hence, we will do only optional check
 		 * if already not duplicated.
 		 */
-		if (action == _strdup_execute
+		if (action == LOG_STRDUP_EXEC
 			|| !log_is_strdup(str)) {
 			param = (log_arg_t)log_strdup(str);
 		}
@@ -764,46 +765,44 @@ static inline log_arg_t __do_strdup(u32_t msk, u32_t idx, log_arg_t param,
 	return param;
 }
 
-#define __LOG_INTERNAL_VA(is_user_context, _src_level, _str, _valist,	\
-						_argnum, _strdup)	\
-do {									\
-	if (is_user_context) {						\
-		log_generic_from_user(_src_level, _str, _valist);	\
-	} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE)) {			\
-		log_generic(_src_level, _str, _valist, _strdup);	\
-	} else {							\
-		if (_argnum == 0)					\
-			_LOG_INTERNAL_0(_src_level, _str);		\
-		else {							\
-			u32_t mask = (_strdup != _strdup_skip) ?	\
-				z_log_get_s_mask(_str, _argnum)		\
-				: 0;					\
-									\
-			if (_argnum == 1)				\
-				_LOG_INTERNAL_1(_src_level, _str,	\
-				__do_strdup(mask, 0,			\
-				va_arg(_valist, log_arg_t), _strdup));	\
-			else						\
-			if (_argnum == 2)				\
-				_LOG_INTERNAL_2(_src_level, _str,	\
-				__do_strdup(mask, 0,			\
-				va_arg(_valist, log_arg_t), _strdup),	\
-				__do_strdup(mask, 1,			\
-				va_arg(_valist, log_arg_t), _strdup));	\
-			else						\
-			if (_argnum == 3)				\
-				_LOG_INTERNAL_3(_src_level, _str,	\
-				__do_strdup(mask, 0,			\
-				va_arg(_valist, log_arg_t), _strdup),	\
-				__do_strdup(mask, 1,			\
-				va_arg(_valist, log_arg_t), _strdup),	\
-				__do_strdup(mask, 2,			\
-				va_arg(_valist, log_arg_t), _strdup));	\
-			else						\
-				log_generic(_src_level, _str,		\
-				_valist, _strdup);			\
-		}							\
-	}								\
+#define __LOG_INTERNAL_VA(is_user_context, _src_level, _str, _valist,	       \
+						_argnum, _strdup_action)       \
+do {									       \
+	if (is_user_context) {						       \
+		log_generic_from_user(_src_level, _str, _valist);	       \
+	} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE)) {			       \
+		log_generic(_src_level, _str, _valist, _strdup_action);	       \
+	} else {							       \
+		if (_argnum == 0)					       \
+			_LOG_INTERNAL_0(_src_level, _str);		       \
+		else {							       \
+			u32_t mask = (_strdup_action != LOG_STRDUP_SKIP) ?     \
+				z_log_get_s_mask(_str, _argnum)		       \
+				: 0;					       \
+									       \
+			if (_argnum == 1)				       \
+				_LOG_INTERNAL_1(_src_level, _str,	       \
+				  z_log_do_strdup(mask, 0,		       \
+				  va_arg(_valist, log_arg_t), _strdup_action));\
+			else if (_argnum == 2)				       \
+				_LOG_INTERNAL_2(_src_level, _str,	       \
+				  z_log_do_strdup(mask, 0,		       \
+				  va_arg(_valist, log_arg_t), _strdup_action), \
+				  z_log_do_strdup(mask, 1,		       \
+				  va_arg(_valist, log_arg_t), _strdup_action));\
+			else if (_argnum == 3)				       \
+				_LOG_INTERNAL_3(_src_level, _str,	       \
+				  z_log_do_strdup(mask, 0,		       \
+				  va_arg(_valist, log_arg_t), _strdup_action), \
+				  z_log_do_strdup(mask, 1,		       \
+				  va_arg(_valist, log_arg_t), _strdup_action), \
+				  z_log_do_strdup(mask, 2,		       \
+				  va_arg(_valist, log_arg_t), _strdup_action));\
+			else						       \
+				log_generic(_src_level, _str,		       \
+				  _valist, _strdup_action);		       \
+		}							       \
+	}								       \
 } while (false)
 
 #include <syscalls/log_core.h>

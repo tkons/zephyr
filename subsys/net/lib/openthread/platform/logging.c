@@ -35,41 +35,41 @@ void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion,
 	 * and the value has been passed in unused (now) aLogRegion.
 	 * If LogRegion value from OT is needed, rewrite macro
 	 * OPENTHREAD_CONFIG_PLAT_LOG_FUNCTION__COUNT_ARGS and use higher bits.
-	 * to pass argsNum.
+	 * to pass args_num.
 	 */
-	u32_t argsNum = (u32_t) aLogRegion;
+	u32_t args_num = (u32_t) aLogRegion;
 #else
-	u32_t argsNum = log_count_args(aFormat);
+	u32_t args_num = log_count_args(aFormat);
 #endif
 
-	va_list paramList;
+	va_list param_list;
 
-	va_start(paramList, aFormat);
+	va_start(param_list, aFormat);
 
 	/* We assume, that OT has no access to strdup utility,
 	 * and we are not obliged to check, if string has already
 	 * been duplicated. So, to save time, in Z_LOG_VA macro calls
-	 * we will use _strdup_execute option.
+	 * we will use LOG_STRDUP_EXEC option.
 	 */
 	switch (aLogLevel) {
 	case OT_LOG_LEVEL_CRIT:
-		Z_LOG_VA(LOG_LEVEL_ERR, aFormat, paramList, argsNum,
-			_strdup_execute);
+		Z_LOG_VA(LOG_LEVEL_ERR, aFormat, param_list, args_num,
+			LOG_STRDUP_EXEC);
 		break;
 	case OT_LOG_LEVEL_WARN:
-		Z_LOG_VA(LOG_LEVEL_WRN, aFormat, paramList, argsNum,
-			_strdup_execute);
+		Z_LOG_VA(LOG_LEVEL_WRN, aFormat, param_list, args_num,
+			LOG_STRDUP_EXEC);
 		break;
 	case OT_LOG_LEVEL_INFO:
-		Z_LOG_VA(LOG_LEVEL_INF, aFormat, paramList, argsNum,
-			_strdup_execute);
+		Z_LOG_VA(LOG_LEVEL_INF, aFormat, param_list, args_num,
+			LOG_STRDUP_EXEC);
 		break;
 	case OT_LOG_LEVEL_DEBG:
-		Z_LOG_VA(LOG_LEVEL_DBG, aFormat, paramList, argsNum,
-			_strdup_execute);
+		Z_LOG_VA(LOG_LEVEL_DBG, aFormat, param_list, args_num,
+			LOG_STRDUP_EXEC);
 		break;
 	default:
 		break;
 	}
-	va_end(paramList);
+	va_end(param_list);
 }
