@@ -335,7 +335,8 @@ void log_printk(const char *fmt, va_list ap)
 
 			z_log_string_from_user(src_level_union.value, str);
 		} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE)) {
-			log_generic(src_level_union.structure, fmt, ap, false);
+			log_generic(src_level_union.structure, fmt, ap,
+							_strdup_skip);
 		} else {
 			u8_t str[CONFIG_LOG_PRINTK_MAX_STRING_LENGTH + 1];
 			struct log_msg *msg;
@@ -376,15 +377,15 @@ u32_t log_count_args(const char *fmt)
 	return args;
 }
 
-void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap, bool enable_strdup)
+void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap,
+						enum _strdup_action action)
 {
 	if (_is_user_context()) {
 		log_generic_from_user(src_level, fmt, ap);
-	} else  if (IS_ENABLED(CONFIG_LOG_IMMEDIATE) &&
+	} else if (IS_ENABLED(CONFIG_LOG_IMMEDIATE) &&
 	    (!IS_ENABLED(CONFIG_LOG_FRONTEND))) {
 		struct log_backend const *backend;
 		u32_t timestamp = timestamp_func();
-
 		for (int i = 0; i < log_backend_count_get(); i++) {
 			backend = log_backend_get(i);
 
@@ -402,15 +403,21 @@ void log_generic(struct log_msg_ids src_level, const char *fmt, va_list ap, bool
 			args[i] = va_arg(ap, log_arg_t);
 		}
 
-		if (enable_strdup) {
+		if (action != _strdup_skip) {
 			u32_t mask = z_log_get_s_mask(fmt, nargs);
 
 			while (mask) {
 				u32_t idx = 31 - __builtin_clz(mask);
 				const char *str = (const char *)args[idx];
 
-				if (!log_is_strdup(str) &&
-					(str != log_strdup_fail_msg)) {
+				/* is_rodata(str) is not checked,
+				 * because log_strdup does it.
+				 * Hence, we will do only optional check
+				 * if already not duplicated.
+				 */
+				if (action == _strdup_execute
+				   || !log_is_strdup(str)
+				) {
 					args[idx] = (log_arg_t)log_strdup(str);
 				}
 				mask &= ~BIT(idx);
@@ -426,7 +433,7 @@ void log_string_sync(struct log_msg_ids src_level, const char *fmt, ...)
 
 	va_start(ap, fmt);
 
-	log_generic(src_level, fmt, ap, false);
+	log_generic(src_level, fmt, ap, _strdup_skip);
 
 	va_end(ap);
 }
