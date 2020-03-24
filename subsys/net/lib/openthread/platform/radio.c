@@ -102,6 +102,87 @@ void energy_detected(struct device *dev, s16_t max_ed)
 	}
 }
 
+enum radio_signal_id {
+	RADIO_SIGNAL_BLOCKING,
+	RADIO_SIGNALS
+};
+
+static struct k_poll_signal radio_signals[RADIO_SIGNALS];
+static struct k_poll_event radio_events[RADIO_SIGNALS];
+
+/**
+ * @brief Check if set, reads, and clears specified radio signal
+ *
+ * @param signal_id     Identifier openthread signal to read
+ * @param signal_value  Value of obtained signal
+ *
+ * @retval              True if signal is valid
+ *
+ */
+static bool radio_signal_check_clear(enum radio_signal_id signal_id,
+						int *signal_value)
+{
+	struct k_poll_signal *signal = &radio_signals[signal_id];
+	int set;
+	bool success = false;
+
+	k_poll_signal_check(signal, &set, signal_value);
+
+	if (set) {
+		k_poll_signal_reset(signal);
+		success = true;
+	}
+	return success;
+}
+
+/**
+ * @brief Sets radio signal with given value
+ *
+ * @param signal_id     Identifier of radio signal
+ * @param signal_value  Value of signal to set
+ *
+ */
+static void radio_signal_set(enum radio_signal_id signal_id,
+						int signal_value)
+{
+	struct k_poll_signal *signal = &radio_signals[signal_id];
+
+	k_poll_signal_raise(signal, signal_value);
+}
+
+/**
+ * @brief Wait for specified radio signal.
+ *
+ * @param signal_start_id  Identifier of first radio signal
+ * @param num_events       Number of signals
+ * @param timeout          Timeut in us
+ *
+ * @retval 0 One or more signals are ready.
+ * @retval -EAGAIN Waiting period timed out.
+ * @retval other -- see k_poll system call.
+ */
+static int radio_signal_poll(enum radio_signal_id signal_start_id,
+					int num_events, s32_t timeout)
+{
+	return k_poll(&radio_events[signal_start_id], num_events,
+								timeout);
+}
+
+/**
+ * @brief Inits radio signals
+ *
+ */
+static void radio_signal_init(void)
+{
+	for (int i = 0; i < RADIO_SIGNALS; i++) {
+		k_poll_signal_init(&radio_signals[i]);
+		k_poll_event_init(&radio_events[i],
+				  K_POLL_TYPE_SIGNAL,
+				  K_POLL_MODE_NOTIFY_ONLY,
+				  &radio_signals[i]);
+	}
+}
+
 enum net_verdict ieee802154_radio_handle_ack(struct net_if *iface,
 					     struct net_pkt *pkt)
 {
@@ -150,6 +231,7 @@ static void dataInit(void)
 void platformRadioInit(void)
 {
 	dataInit();
+	radio_signal_init();
 
 	radio_dev = device_get_binding(CONFIG_NET_CONFIG_IEEE802154_DEV_NAME);
 	__ASSERT_NO_MSG(radio_dev != NULL);
@@ -361,12 +443,49 @@ otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
 	return &sTransmitFrame;
 }
 
+static void get_rssi_energy_detected(struct device *dev, s16_t max_ed)
+{
+	ARG_UNUSED(dev);
+	radio_signal_set(RADIO_SIGNAL_BLOCKING, max_ed);
+}
+
 int8_t otPlatRadioGetRssi(otInstance *aInstance)
 {
-	ARG_UNUSED(aInstance);
+	s8_t ret_rssi = INT8_MAX;
+	int signal_value;
 
-	/* TODO: No API in Zephyr to get the RSSI. */
-	return 0;
+	otRadioCaps radioCaps =  otPlatRadioGetCaps(aInstance);
+
+	if (!(radioCaps & OT_RADIO_CAPS_ENERGY_SCAN)) {
+		/*
+		 *TODO: No API in Zephyr to get the RSSI
+		 * when OT_RADIO_CAPS_ENERGY_SCAN is not available
+		 */
+		ret_rssi = 0;
+	} else {
+		/*
+		 * Blocking implementation of get RSSI
+		 * using no-blocking ed_scan
+		 */
+		int error = 0;
+		const u16_t energy_detection_time = 1;
+
+		error = radio_api->ed_scan(radio_dev, energy_detection_time,
+					    get_rssi_energy_detected);
+
+		if (!error) {
+
+			radio_signal_poll(RADIO_SIGNAL_BLOCKING, 1,
+							K_FOREVER);
+
+			if (radio_signal_check_clear(RADIO_SIGNAL_BLOCKING,
+							&signal_value)) {
+				ret_rssi = (s8_t) signal_value;
+			}
+		}
+	}
+
+	return ret_rssi;
 }
 
 otRadioCaps otPlatRadioGetCaps(otInstance *aInstance)
