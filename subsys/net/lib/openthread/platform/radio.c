@@ -25,7 +25,6 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_OPENTHREAD_L2_LOG_LEVEL);
 #include <device.h>
 #include <net/ieee802154_radio.h>
 #include <net/net_pkt.h>
-#include <net/openthread.h>
 #include <sys/__assert.h>
 
 #include <openthread-system.h>
@@ -103,6 +102,87 @@ void energy_detected(struct device *dev, s16_t max_ed)
 	}
 }
 
+enum radio_signal_id {
+	RADIO_SIGNAL_BLOCKING,
+	RADIO_SIGNALS
+};
+
+static struct k_poll_signal radio_signals[RADIO_SIGNALS];
+static struct k_poll_event radio_events[RADIO_SIGNALS];
+
+/**
+ * @brief Check if set, reads, and clears specified radio signal
+ *
+ * @param signal_id     Identifier openthread signal to read
+ * @param signal_value  Value of obtained signal
+ *
+ * @retval              True if signal is valid
+ *
+ */
+static bool radio_signal_check_clear(enum radio_signal_id signal_id,
+						int *signal_value)
+{
+	struct k_poll_signal *signal = &radio_signals[signal_id];
+	int set;
+	bool success = false;
+
+	k_poll_signal_check(signal, &set, signal_value);
+
+	if (set) {
+		k_poll_signal_reset(signal);
+		success = true;
+	}
+	return success;
+}
+
+/**
+ * @brief Sets radio signal with given value
+ *
+ * @param signal_id     Identifier of radio signal
+ * @param signal_value  Value of signal to set
+ *
+ */
+static void radio_signal_set(enum radio_signal_id signal_id,
+						int signal_value)
+{
+	struct k_poll_signal *signal = &radio_signals[signal_id];
+
+	k_poll_signal_raise(signal, signal_value);
+}
+
+/**
+ * @brief Wait for specified radio signal.
+ *
+ * @param signal_start_id  Identifier of first radio signal
+ * @param num_events       Number of signals
+ * @param timeout          Timeut in us
+ *
+ * @retval 0 One or more signals are ready.
+ * @retval -EAGAIN Waiting period timed out.
+ * @retval other -- see k_poll system call.
+ */
+static int radio_signal_poll(enum radio_signal_id signal_start_id,
+					int num_events, s32_t timeout)
+{
+	return k_poll(&radio_events[signal_start_id], num_events,
+								timeout);
+}
+
+/**
+ * @brief Inits radio signals
+ *
+ */
+static void radio_signal_init(void)
+{
+	for (int i = 0; i < RADIO_SIGNALS; i++) {
+		k_poll_signal_init(&radio_signals[i]);
+		k_poll_event_init(&radio_events[i],
+				  K_POLL_TYPE_SIGNAL,
+				  K_POLL_MODE_NOTIFY_ONLY,
+				  &radio_signals[i]);
+	}
+}
+
 enum net_verdict ieee802154_radio_handle_ack(struct net_if *iface,
 					     struct net_pkt *pkt)
 {
@@ -151,6 +231,7 @@ static void dataInit(void)
 void platformRadioInit(void)
 {
 	dataInit();
+	radio_signal_init();
 
 	radio_dev = device_get_binding(CONFIG_NET_CONFIG_IEEE802154_DEV_NAME);
 	__ASSERT_NO_MSG(radio_dev != NULL);
@@ -365,7 +446,7 @@ otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
 static void get_rssi_energy_detected(struct device *dev, s16_t max_ed)
 {
 	ARG_UNUSED(dev);
-	ot_signal_set(OPENTHREAD_SIGNAL_BLOCKING, max_ed);
+	radio_signal_set(RADIO_SIGNAL_BLOCKING, max_ed);
 }
 
 int8_t otPlatRadioGetRssi(otInstance *aInstance)
@@ -394,10 +475,10 @@ int8_t otPlatRadioGetRssi(otInstance *aInstance)
 
 		if (!error) {
 
-			ot_signal_poll(OPENTHREAD_SIGNAL_BLOCKING, 1,
+			radio_signal_poll(RADIO_SIGNAL_BLOCKING, 1,
 							K_FOREVER);
 
-			if (ot_signal_check_clear(OPENTHREAD_SIGNAL_BLOCKING,
+			if (radio_signal_check_clear(RADIO_SIGNAL_BLOCKING,
 							&signal_value)) {
 				ret_rssi = (s8_t) signal_value;
 			}
